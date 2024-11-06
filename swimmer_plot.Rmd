@@ -1,0 +1,224 @@
+---
+title: "Swimmer_Plots"
+author: "Mackenzie Mekler"
+date: "2024-11-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+## Load Libraries : Need to be run for every new session
+```{r, message = FALSE}
+library(tidyverse) #ggplot2, dplyr, tidyr, readr, purrr, tibble, stringr, forcats
+library(swimplot)
+
+# Set global ggplot theme
+theme_set(theme_grey() + theme(text = element_text(size = 24), legend.position="bottom"))
+```
+
+
+## Load and Modify the csv file
+```{r, message = FALSE}
+kms <- read_csv("test.csv")
+kms$`Field Point` <- factor(kms$`Field Point`)
+
+# for testing 
+# kms <- kms[7,]
+```
+
+
+## Number of T cells attached
+```{r, message = FALSE}
+vecs <- list()
+for(cell in 1:nrow(kms)){
+  tcellVec <- replicate(97, 0)
+  # print(kms[cell,])
+  cnx1 <- kms[cell,]$`#1o.Connection`
+  cnx2 <- kms[cell,]$`#2o.Connection`
+  cnx3 <- kms[cell,]$`#3o.Connection`
+  
+  # I can make a vector of length 97 and put either 0, 1, 2, or 3 based on number of T cells 
+  # another vector can be 0, 1, 2, 3 based on nothing, lost, av+, or tcav+
+  
+  # for cnx1
+  if(grepl(";", cnx1)){
+    split1a <- str_split(cnx1, ';')
+    for(item in split1a[[1]]){
+      # print(item)
+      mysplit <- strsplit(item, '-')
+      start <- as.integer(mysplit[[1]][1])
+      end <- as.integer(mysplit[[1]][2])
+      if(length(mysplit[[1]]) < 2){
+        end <- start
+      }
+      for(i in 1:length(tcellVec)){
+        if(start <= i & i <= end){
+          tcellVec[i] <- tcellVec[i] + 1
+        }
+      }
+    }
+  }
+  else {
+    mysplit <- strsplit(cnx1, '-')
+    start <- as.integer(mysplit[[1]][1])
+    end <- as.integer(mysplit[[1]][2])
+    if(length(mysplit[[1]]) < 2){
+      end <- start
+    }
+    for(i in 1:length(tcellVec)){
+      if(start <= i & i <= end){
+        tcellVec[i] <- tcellVec[i] + 1
+      }
+    }
+  }
+  
+  # for cnx2
+  if(!is.na(cnx2))
+  if(grepl(";", cnx2)){
+    split1a <- str_split(cnx2, ';')
+    for(item in split1a[[1]]){
+      # print(item)
+      mysplit <- strsplit(item, '-')
+      start <- as.integer(mysplit[[1]][1])
+      end <- as.integer(mysplit[[1]][2])
+      if(length(mysplit[[1]]) < 2){
+        end <- start
+      }
+      for(i in 1:length(tcellVec)){
+        if(start <= i & i <= end){
+          tcellVec[i] <- tcellVec[i] + 1
+        }
+      }
+    }
+  }
+  else {
+    mysplit <- strsplit(cnx2, '-')
+    start <- as.integer(mysplit[[1]][1])
+    end <- as.integer(mysplit[[1]][2])
+    if(length(mysplit[[1]]) < 2){
+      end <- start
+    }
+    for(i in 1:length(tcellVec)){
+      if(start <= i & i <= end){
+        tcellVec[i] <- tcellVec[i] + 1
+      }
+    }
+  }
+  
+  # for cnx3
+  if(!is.na(cnx3))
+  if(grepl(";", cnx3)){
+    split1a <- str_split(cnx3, ';')
+    for(item in split1a[[1]]){
+      # print(item)
+      mysplit <- strsplit(item, '-')
+      start <- as.integer(mysplit[[1]][1])
+      end <- as.integer(mysplit[[1]][2])
+      if(length(mysplit[[1]]) < 2){
+        end <- start
+      }
+      for(i in 1:length(tcellVec)){
+        if(start <= i & i <= end){
+          tcellVec[i] <- tcellVec[i] + 1
+        }
+      }
+    }
+  }
+  else {
+    mysplit <- strsplit(cnx3, '-')
+    start <- as.integer(mysplit[[1]][1])
+    end <- as.integer(mysplit[[1]][2])
+    if(length(mysplit[[1]]) < 2){
+      end <- start
+    }
+    for(i in 1:length(tcellVec)){
+      if(start <= i & i <= end){
+        tcellVec[i] <- tcellVec[i] + 1
+      }
+    }
+  }
+  vecs[[cell]] <- tcellVec
+}
+
+
+```
+
+
+
+
+
+
+
+
+
+## Final Vectors 
+```{r}
+for(i in 1:length(vecs)){
+  r <- kms[i,]
+  if(!is.na(r$`Myelo AnnexinV+`)){
+    av <- r$`Myelo AnnexinV+`
+    vecs[[i]][as.integer(av)] <- 4
+  }
+  if(!is.na(r$`Tcell AnnexinV+`)){
+    tcav <- str_split(r$`Tcell AnnexinV+`, ',')
+    for(num in 1:length(tcav)){
+      vecs[[i]][as.integer(tcav[[1]][num])] <- 5
+    }
+  }
+  if(!is.na(r$`Stack # (lost)`)){
+    lost <- r$`Stack # (lost)`
+    vecs[[i]][as.integer(lost)] <- 6
+  }
+}
+
+```
+
+
+
+https://kathoffman.github.io/swimmer-plots/slides-wcm.html#6
+## Make the graphs 
+
+note that the fig.width and fig.height in the heading are how I have been adjusting the size of the graph
+I found that it was easier to do it this way than in the ggplot itself
+```{r fig.align="center", echo=FALSE, fig.width=15, fig.height=30}
+
+# I think I need to change the way that my data is stored in the final df to be more like in the hyperlink
+
+final_vecs <- data.frame(
+  status = unlist(vecs), 
+  id = rep(seq_along(vecs), sapply(vecs, length))
+)
+
+final_vecs$timepoint <- rep(1:97, length.out = nrow(final_vecs))
+final_vecs$status <- factor(final_vecs$status, levels = c("0", "1", "2", "3", "4", "5", "6"))
+final_vecs$id <- as.factor(final_vecs$id)
+
+# final_vecs <- as.data.frame(do.call(rbind, vecs))
+# final_vecs$id <- 1:length(kms$`Cell#`)
+
+final_vecs %>%
+  # filter(as.integer(id) < 10) %>%
+  ggplot(aes(y=id, x=timepoint, color=status)) +
+  theme_bw() +
+  geom_line(size=3, aes(group=id), na.rm = TRUE) + 
+  scale_color_manual(values = c(
+    "0" = "lightgreen", 
+    "1" = "lightblue",
+    "2" = "blue",
+    "3" = "darkblue", 
+    "4" = "red",
+    "5" = "maroon",
+    "6" = "darkgray"
+  ))
+
+
+  # +
+  # geom_point(aes(x=av)) +
+  # geom_point(aes(x=severe_this_day)) +
+  # geom_point(aes(x=death_this_day))
+```
+
+In the future I will be able to add segements of code in here that pick out the specific values that I want to show much more easily than using excel. 
