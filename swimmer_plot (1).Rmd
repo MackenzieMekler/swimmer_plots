@@ -1,0 +1,439 @@
+---
+title: "Swimmer_Plots"
+author: "Mackenzie Mekler"
+date: "2024-11-05"
+output: html_document
+---
+
+This segment is just included in case that knitting is wanted. Please just don't touch.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+## Load Libraries : Need to be run for every new session
+
+tidyverse should be the only necessary library. Always make sure to run this code.
+```{r, message = FALSE}
+library(tidyverse) #ggplot2, dplyr, tidyr, readr, purrr, tibble, stringr, forcats
+library(readxl)
+library(gridExtra)
+
+# Set global ggplot theme
+theme_set(theme_grey() + theme(text = element_text(size = 24), legend.position="bottom"))
+
+# Useful variables
+lines <- factor(levels = c("Parental", "BAKBAX DKO", "95 KO", "BCL2 KO", "BCLXL KO"))
+```
+
+
+## Load and Modify the Excel Files 
+Note that this is set to ignore the first two rows of the first sheet of the excel file because the template I am using doesn't start the actual table until the third row. 
+```{r}
+bclxl <- read_excel("KMS18 BCLXLKO Microscopy Analysis 10-10-24.xlsx", sheet = 1, skip = 2) 
+bcl2 <- read_excel("KMS18 BCL2KO Microscopy Analysis 10-08-24.xlsx", sheet = 1, skip = 2)
+fas <- read_excel("KMS18 95KO Microscopy Analysis 11-07-24.xlsx", sheet = 1, skip = 2)
+bakbax <- read_excel("KMS18 BAKBAX DKO Microscopy Analysis 11-12-24.xlsx", sheet = 1, skip = 2)
+parental <- read_excel("KMS18 Microscopy Analysis 10-22-24.xlsx", sheet = 1, skip = 2)
+```
+
+
+## Define Cell Line
+```{r}
+cell_line <- parental
+```
+
+
+
+## Number of T cells attached
+
+This column of code aims to create the list of vectors named vecs. This list should be the 
+same length as the number of cells in the csv file being analyzed. Additionally, each vector in this
+list would have length 97 for the number of frames. This code gives a number 0-3 for the number 
+of T cells attached at any given point. 
+
+This is the function that splits up the data found in the excel columns. They must be separated by either a semicolon or comma and the start/end must be separated by a hypon. If not it may cause an error. 
+
+```{r}
+start_end <- function(string) {
+  data <- strsplit(string, "[;,]")[[1]]
+  ranges <- lapply(data, function(x) as.numeric(unlist(strsplit(x, "-"))))
+  
+  return(ranges)
+}
+```
+
+
+I made this into a function mainly just cause it cleans up my environment nicely but I think it will also give me the ability to easily start having multiple of these swimmer plots created in this Rmd file at the same time. This could require adjusting my next cells as well but it really may be worth it. Especially if I condense all of my actual creating vectors parts into functions and then just run a bunch of cleaning up and selecting stuff on all of my things at once and then I can try to figure out how to arrange them nicely all together. 
+```{r, message = FALSE}
+make_vectors <- function(cell_line){
+  vecs <- list()
+  for(cell in 1:nrow(cell_line)){
+    tcellVec <- replicate(97, 0)
+    # print(kms[cell,])
+    cnx1 <- cell_line[cell,]$`#1o.Connection`
+    cnx2 <- cell_line[cell,]$`#2o.Connection`
+    cnx3 <- cell_line[cell,]$`#3o.Connection`
+    if(is.na(cnx1)){
+      break
+    }
+    
+    # for cnx1
+    data_list <- start_end(cnx1)
+    for(item in data_list) {
+      start <- item[1]
+      if(length(item) < 2){
+        end <- start
+      }
+      else{
+        end <- item[2]
+      }
+      for(i in 1:length(tcellVec)){
+        if(start <= i & i <= end){
+          tcellVec[i] <- tcellVec[i] + 1
+        }
+      }
+    }
+    
+    # for cnx2
+    if(!is.na(cnx2)){
+      data_list <- start_end(cnx2)
+      for(item in data_list) {
+        start <- item[1]
+        if(length(item) < 2){
+          end <- start
+        }
+        else{
+          end <- item[2]
+        }
+        for(i in 1:length(tcellVec)){
+          if(start <= i & i <= end){
+            tcellVec[i] <- tcellVec[i] + 1
+          }
+        }
+      }
+    }
+  
+    # for cnx3
+    if(!is.na(cnx3)){
+      data_list <- start_end(cnx3)
+      for(item in data_list) {
+        start <- item[1]
+        if(length(item) < 2){
+          end <- start
+        }
+        else{
+          end <- item[2]
+        }
+        for(i in 1:length(tcellVec)){
+          if(start <= i & i <= end){
+            tcellVec[i] <- tcellVec[i] + 1
+          }
+        }
+      }
+    }
+    vecs[[cell]] <- tcellVec
+  }
+  
+  for(i in 1:length(vecs)){
+    r <- cell_line[i,]
+    if(!is.na(r$`Myelo AnnexinV+`)){
+      av <- r$`Myelo AnnexinV+`
+      vecs[[i]][as.integer(av)] <- 4
+    }
+    if(!is.na(r$`Tcell AnnexinV+`)){
+      tcav <- str_split(r$`Tcell AnnexinV+`, ';')
+      for(num in 1:length(tcav)){
+        vecs[[i]][as.integer(tcav[[1]][num])] <- 5
+      }
+    }
+    if(!is.na(r$`Stack # (lost)`)){
+      lost <- r$`Stack # (lost)`
+      vecs[[i]][as.integer(lost):length(vecs[[i]])] <- c(6)
+    }
+  }
+  
+  return(vecs)
+}
+```
+
+I need to turn this into a list soon so that in my later data analysis I can loop through it rather than manually making the new graphs each time. If I do this, I need to put all of the functions for analysis up here so that they are loaded in before I will need them and no errors get thrown. 
+```{r}
+vpar <- make_vectors(cell_line = parental)
+vfas <- make_vectors(cell_line = fas)
+vxl <- make_vectors(cell_line = bclxl)
+v2 <- make_vectors(cell_line = bcl2)
+vdko <- make_vectors(cell_line = bakbax)
+
+master_list <- list(
+  "Parental" = vpar,
+  "BAK/BAX DKO" = vdko,
+  "95KO" = vfas,
+  "BCLXL KO" = vxl,
+  "BCL2 KO" = v2
+)
+```
+
+## Filter Cells
+This part is being used to pick out the cells that I want to show on the graph. 
+
+```{r}
+# graphed_vecs <- vecs[which(sapply(vecs, function(x) all(x < 6)))]  # selects ones that don't go out of frame
+# graphed_vecs <- vecs[which(sapply(vecs, function(x) any(x == 4)))]  # selects all with a myeloma annexin
+# graphed_vecs <- vecs[which(sapply(vecs, function(x) any(x == 5)))]  # selects all with a t cell annexin
+# graphed_vecs <- vfas[sapply(vfas, function(x) all(x != 6))]
+# graphed_vecs <- vxl[which(sapply(vxl, function(x) any(x == 4)))]
+graphed_vecs <- vpar[which(sapply(vpar, function(x) all(x < 6)))]
+graphed_vecs <- graphed_vecs[1:30]
+```
+
+
+## Make the graphs 
+https://kathoffman.github.io/swimmer-plots/slides-wcm.html#6
+
+note that the fig.width and fig.height in the heading are how I have been adjusting the size of the graph
+I found that it was easier to do it this way than in the ggplot itself
+
+This converts the list to a dataframe of 3 columns. The columns are the cell id (factor), 
+the timepoints (int), and the status of the cells (factor). The ggplot is then made with geom_lines
+that are flat and colored by the status values. 
+```{r fig.align="center", echo=FALSE, fig.width=10, fig.height=10}
+
+# I think I need to change the way that my data is stored in the final df to be more like in the hyperlink
+
+final_vecs <- data.frame(
+  status = unlist(graphed_vecs), 
+  id = rep(seq_along(graphed_vecs), sapply(graphed_vecs, length))
+)
+
+final_vecs$timepoint <- rep(1:97, length.out = nrow(final_vecs))
+final_vecs$status <- factor(final_vecs$status, levels = c("0", "1", "2", "3", "4", "5", "6"))
+final_vecs$id <- as.factor(final_vecs$id)
+
+# final_vecs <- as.data.frame(do.call(rbind, vecs))
+# final_vecs$id <- 1:length(kms$`Cell#`)
+
+final_vecs %>%
+  # filter(as.integer(id) < 10) %>%
+  ggplot(aes(y=id, x=timepoint, color=status)) +
+  theme_bw() +
+  geom_line(size=6, aes(group=id), na.rm = TRUE) + 
+  scale_color_manual(values = c(
+    "0" = "#EAEDED",    # 2e4053
+    "1" = "#98DFEA",
+    "2" = "#2471a3",
+    "3" = "#25283D", 
+    "4" = "#8F3985",
+    "5" = "#F26430",
+    "6" = "#5d6d7e"
+  ),
+  labels = c(
+    "0" = "No T Cells",
+    "1" = "1 T Cell",
+    "2" = "2 T Cells",
+    "3" = "3 T Cells",
+    "4" = "Myeloma Annexin",
+    "5" = "T Cell Annexin", 
+    "6" = "Lost Cell"
+  )) + 
+  theme(legend.position = "bottom", legend.text = element_text(size = 22), legend.title = element_text(size = 24), plot.title = element_text(size = 28, face="bold", color="black")) + 
+  labs(
+    title = "KMS18 Annexin Events",
+    subtitle = "",
+    x = "Timepoints (1 Frame = 10min)",
+    y = "Cell #",
+    color = "Status of Cell: "
+  )
+
+
+  # +
+  # geom_point(aes(x=av)) +
+  # geom_point(aes(x=severe_this_day)) +
+  # geom_point(aes(x=death_this_day))
+```
+
+In the future I will be able to add segements of code in here that pick out the specific values that I want to show much more easily than using excel. 
+
+
+## Extract T cell detachment data
+
+```{r}
+detachment <- function(vec_list){
+  totals <- 0
+  for(vector in vec_list){
+    six_findr <- which(vector == 6)
+    if (length(six_findr) > 0) {
+      vector <- vector[1:(six_findr[1] - 1)]
+    }
+    valid_indices <- vector[!(vector[-1] %in% c(4, 5, 6) | vector[-length(vector)] %in% c(4, 5, 6))]
+    differences <- valid_indices[-1] - valid_indices[-length(valid_indices)]
+    decreases <- differences[differences < 0]
+    count_decreases <- length(decreases)
+    total <- sum(abs(decreases))
+    # print(total)   ## debugging line 
+    totals <- totals + total
+  }
+  return(totals)
+}
+
+```
+
+```{r}
+detachDF <- data.frame(
+  line = c("Parental", "95 KO", "BAKBAX DKO", "BCL2 KO", "BCLXL KO"),
+  detachments = c(132, 75, 105, 84, 39)
+)
+
+detachDF$line <- factor(detachDF$line, levels = c("Parental", "BAKBAX DKO", "95 KO", "BCL2 KO", "BCLXL KO"))
+
+ggplot(detachDF, aes(x = line, y = detachments, fill = line)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  labs(
+    title = "T Cell-Myeloma Detachments",
+    subtitle = "",
+    x = "",
+    y = "# of Detachments") +
+  theme(
+    axis.text.x = element_text(size = 14, angle = 45, hjust = 1), aspect.ratio = 0.5, 
+    axis.title = element_text(size = 12),
+    plot.title = element_text(size = 18, face="bold", color="black")
+  )
+```
+
+```{r}
+myeloma_deaths <- length(na.omit((cell_line$`Myelo AnnexinV+`)))
+
+deathDF <- data.frame(
+  line = c("Parental", "95 KO", "BAKBAX DKO", "BCL2 KO", "BCLXL KO"),
+  death_percent = c(3/132 * 100, 11/104 * 100, 0, 9/72 * 100, 9 / 74 * 100)
+)
+
+deathDF$line <- factor(deathDF$line, levels = c("Parental", "BAKBAX DKO", "95 KO", "BCL2 KO", "BCLXL KO"))
+
+ggplot(deathDF, aes(x = line, y = death_percent, fill = line)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  labs(
+    title = "% of Myeloma Annexin Events",
+    subtitle = "",
+    x = "",
+    y = "% of Annexin+ Cells") +
+  theme(
+    axis.text.x = element_text(size = 14, angle = 45, hjust = 1), aspect.ratio = 0.5, 
+    axis.title = element_text(size = 12),
+    plot.title = element_text(size = 18, face="bold", color="black")
+  )
+```
+
+## Look at T Cell Detachment in alive vs. dead cells 
+```{r}
+alivevdead <- data.frame(
+  line = c(),
+  fate = c(),
+  detach = c()
+)
+```
+
+```{r} 
+v <- vdko
+name <- "BAK/BAX DKO"
+dead <- v[which(sapply(v, function(x) any(x == 4)))]
+alive <- v[which(sapply(v, function(x) all(x != 4)))]
+
+# Number of detachments per cell (I normalized to the number of cells)
+ddead <- detachment(dead) / length(dead)
+dalive <- detachment(alive) / length(alive)
+
+# I am going to make a grouped bar graph that shows detachment/cell for each of 
+# cell lines. I will have a dataframe that has the cell line (which I will use to 
+# make the groups), alive/dead, and the number of detachments
+alivevdead <- rbind(alivevdead, data.frame(line = c(name, name),fate = c("alive", "dead"), detach = c(dalive, ddead)))
+```
+
+
+```{r}
+alivevdead$line <- factor(alivevdead$line, levels = c("Parental", "BAKBAX", "95 KO", "BCL2 KO", "BCLXL KO"))
+alivevdead$fate <- factor(alivevdead$fate, levels = c('alive', 'dead'))
+ggplot(alivevdead, aes(y = detach, x = line, fill = fate)) + 
+  geom_bar(stat = "identity", position = "dodge")
+
+```
+## Look at T Cell Time Engaged
+```{r}
+timeengaged <- data.frame(
+  line = c(),
+  fate = c(),
+  time = c()
+)
+```
+
+```{r}
+line <- vpar
+name <- "BAK/BAX DKO"
+fate <- "alive"
+v <- line[sapply(line, function(x) all(x != 6))]
+dead <- v[which(sapply(v, function(x) any(x == 4)))]
+alive <- v[which(sapply(v, function(x) all(x != 4)))]
+
+
+countlist <- sapply(alive, function(x){
+  counter <- 0
+  for(num in x){
+    if(num != 0){
+      counter <- counter + 1
+    }
+  }
+  return(counter)
+})
+
+timeengaged <- rbind(
+  timeengaged, data.frame(
+    line = rep(name, length.out = length(countlist)),
+    fate = rep(fate, length.out = length(countlist)),
+    time = countlist
+  )
+)
+
+```
+
+```{r}
+timeengaged$line <- factor(timeengaged$line, levels = c("Parental", "BAK/BAX DKO", "95KO", "BCL2 KO", "BCLXL KO"))
+timeengaged$fate <- factor(timeengaged$fate, levels = c('alive', 'dead'))
+ggplot(timeengaged, aes(y = time, x = line, fill = fate)) + 
+  geom_violin() +
+  geom_jitter(alpha = 0.5, aes(color = fate), position = position_jitterdodge(dodge.width = 0.8, jitter.width = 0.2)) +
+  scale_color_manual(values = c("alive" = "darkorange", "dead" = "blue"))
+```
+
+## Final Graph: Average time before disconnecting ? 
+I dont love this graph because I don't actually have a way to prove that the time before disconnecting is the same T Cell. Like it could be that one joins and the other disconnects. I think I have the graphs that I want right now and what I need to spend my time doing is going through my data and trying to find some more datapoints.
+
+```{r}
+# ttd <- 
+```
+
+
+
+## Final Vectors 
+
+This part cycles through each vector in the list and edits it to add in if there is a "special event"
+such as myeloma cell annexin (4), t cell annexin (5), or if the cell is lost from frame (6)
+
+```{r}
+"for(i in 1:length(vecs)){
+  r <- cell_line[i,]
+  if(!is.na(r$`Myelo AnnexinV+`)){
+    av <- r$`Myelo AnnexinV+`
+    vecs[[i]][as.integer(av)] <- 4
+  }
+  if(!is.na(r$`Tcell AnnexinV+`)){
+    tcav <- str_split(r$`Tcell AnnexinV+`, ';')
+    for(num in 1:length(tcav)){
+      vecs[[i]][as.integer(tcav[[1]][num])] <- 5
+    }
+  }
+  if(!is.na(r$`Stack # (lost)`)){
+    lost <- r$`Stack # (lost)`
+    vecs[[i]][as.integer(lost)] <- 6
+  }
+}" 
+```
